@@ -18,12 +18,12 @@ public class GeneratorController : ControllerBase
     /// <summary>
     /// 生成文章接口
     /// 调用方式：POST /Generator/generate?provider=newapi
-    /// Header: x-api-key: (可选)
     /// </summary>
     [HttpPost("generate")]
     public async Task<IActionResult> Generate([FromBody] GenerateRequest request, [FromQuery] string provider = "google")
     {
         // 1. 获取对应的服务 (google 或 newapi)
+        // 注意：如果不传 provider，默认用 google。如果你主要用 newapi，这里 URL 参数记得带上
         var aiService = _serviceProvider.GetKeyedService<IAIService>(provider);
 
         if (aiService == null)
@@ -40,19 +40,20 @@ public class GeneratorController : ControllerBase
         try
         {
             // 3. 调用服务
+            // ⚠️ 关键点：NewApiService.cs 里已经处理了 BuildArticlePrompt 和 CleanAiResponse
+            // 所以这里直接透传 request 即可，Controller 不需要再做任何逻辑处理！
             var result = await aiService.GenerateContentAsync(request);
             
             return Ok(new
             {
                 provider = provider,
                 modelUsed = request.ModelName ?? "Default",
-                isHtml = request.IsHtml, // 方便前端确认当前模式
-                content = result
+                isHtml = request.IsHtml,
+                content = result // Service 返回的已经是处理好、无换行的 HTML 了
             });
         }
         catch (Exception ex)
         {
-            // 记录日志...
             return StatusCode(500, new { error = $"生成失败: {ex.Message}" });
         }
     }

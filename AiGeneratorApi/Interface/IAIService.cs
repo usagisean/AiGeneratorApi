@@ -6,5 +6,6 @@ namespace AiGeneratorApi.Interface
     {
         // 统一接口：传入 Request，返回生成的文本
         Task<string> GenerateContentAsync(GenerateRequest request);
+        Task<List<string>> GetModelsAsync();
     }
 }

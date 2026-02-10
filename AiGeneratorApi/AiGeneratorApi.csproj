@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="DotNetEnv" Version="3.1.1" />
     <PackageReference Include="Google.Cloud.AIPlatform.V1" Version="*" />
     <PackageReference Include="Google.Cloud.Storage.V1" Version="*" />
     <PackageReference Include="Google.Protobuf" Version="*" />
@@ -18,6 +19,16 @@
 
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.21.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update=".env">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include=".github\workflows\deploy.yml" />
   </ItemGroup>
 
 </Project>

@@ -10,5 +10,12 @@ namespace AiGeneratorApi.Service
         {
             return $"来自 OpenAI 的回复: {request.Prompt}";
         }
+        public Task<List<string>> GetModelsAsync()
+        {
+            return Task.FromResult(new List<string> 
+            { 
+                "gpt-4o"
+            });
+        }
     }
 }

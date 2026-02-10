@@ -8,10 +8,8 @@ namespace AiGeneratorApi.Controllers;
 [Route("[controller]")]
 public class GeneratorController : ControllerBase
 {
-    // 这里的 _serviceProvider 就是用来“查找”服务的工具
     private readonly IServiceProvider _serviceProvider;
 
-    // 构造函数：注入 IServiceProvider
     public GeneratorController(IServiceProvider serviceProvider)
     {
         _serviceProvider = serviceProvider;
@@ -20,46 +18,51 @@ public class GeneratorController : ControllerBase
     /// <summary>
     /// 生成文章接口
     /// 调用方式：POST /Generator/generate?provider=newapi
+    /// Header: x-api-key: (可选)
     /// </summary>
     [HttpPost("generate")]
     public async Task<IActionResult> Generate([FromBody] GenerateRequest request, [FromQuery] string provider = "google")
     {
-        // 1. 【核心逻辑】根据 provider 字符串（"google" 或 "newapi"）获取对应的服务
-        // GetKeyedService 是 .NET 8 新增的 API，专门配合 AddKeyedScoped 使用
+        // 1. 获取对应的服务 (google 或 newapi)
         var aiService = _serviceProvider.GetKeyedService<IAIService>(provider);
 
-        // 2. 如果找不到（比如用户传了 provider=baidu，但我们没注册），报错
         if (aiService == null)
         {
             return BadRequest($"不支持的提供商: {provider}。请使用 'google' 或 'newapi'。");
         }
 
-        // 3. 调用服务
+        // 2. 校验参数
+        if (string.IsNullOrWhiteSpace(request.Prompt))
+        {
+            return BadRequest("提示词 Prompt 不能为空");
+        }
+
         try
         {
+            // 3. 调用服务
             var result = await aiService.GenerateContentAsync(request);
             
             return Ok(new
             {
                 provider = provider,
                 modelUsed = request.ModelName ?? "Default",
+                isHtml = request.IsHtml, // 方便前端确认当前模式
                 content = result
             });
         }
         catch (Exception ex)
         {
-            return StatusCode(500, $"生成失败: {ex.Message}");
+            // 记录日志...
+            return StatusCode(500, new { error = $"生成失败: {ex.Message}" });
         }
     }
 
     /// <summary>
     /// 获取模型列表接口
-    /// 调用方式：GET /Generator/models?provider=newapi
     /// </summary>
     [HttpGet("models")]
     public async Task<IActionResult> GetModels([FromQuery] string provider = "google")
     {
-        // 1. 同样的逻辑，根据 key 获取服务
         var aiService = _serviceProvider.GetKeyedService<IAIService>(provider);
 
         if (aiService == null)
@@ -67,7 +70,6 @@ public class GeneratorController : ControllerBase
             return BadRequest($"不支持的提供商: {provider}");
         }
 
-        // 2. 调用 GetModelsAsync
         try
         {
             var models = await aiService.GetModelsAsync();

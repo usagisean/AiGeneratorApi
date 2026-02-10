@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions; // 引入正则
 using AiGeneratorApi.Interface;
 using AiGeneratorApi.Model;
 using Microsoft.Extensions.Options;
@@ -18,7 +19,7 @@ public class NewApiService : IAIService
         _httpClient = httpClientFactory.CreateClient();
         _config = config.Value.NewApi;
 
-        // 保持之前的伪装，防止 Cloudflare 拦截
+        // 保持之前的伪装
         _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
         _httpClient.DefaultRequestHeaders.Accept.ParseAdd("application/json");
     }
@@ -28,38 +29,64 @@ public class NewApiService : IAIService
         // 1. 确定模型
         var model = !string.IsNullOrEmpty(request.ModelName) ? request.ModelName : _config.DefaultModelId;
 
+        string rawContent = "";
+
         // 2. 【智能路由核心逻辑】
-        // 只要配置了免费 Key，就先试免费的（省钱第一！）
+        // 优先尝试免费通道
         if (!string.IsNullOrEmpty(_config.FreeApiKey))
         {
             try
             {
-                // 尝试用免费通道请求
-                // 注意：如果模型在免费账号里没有（比如 gpt-4），这里会抛出异常，正好被下面的 catch 捕获
-                return await ExecuteRequestAsync(request.Prompt, model, _config.FreeApiKey, "Free");
+                // 注意：这里多传了 request.IsHtml 参数
+                rawContent = await ExecuteRequestAsync(request.Prompt, model, _config.FreeApiKey, "Free", request.IsHtml);
+                // 如果成功拿到内容，直接去清洗并返回
+                return CleanAiResponse(rawContent, request.IsHtml);
             }
             catch (Exception ex)
             {
-                // 捕获所有失败（404模型不存在、401没权限、500服务器挂了...）
-                // 只是在控制台记录一下，不抛出给用户
                 Console.WriteLine($"[SmartRoute] 免费通道无法服务 '{model}': {ex.Message} -> 正在切换 VIP 通道兜底...");
             }
         }
 
-        // 3. 既然免费通道搞不定（或者没配），那就用 VIP 通道（全能王）兜底
-        // 如果这里也挂了，那就真挂了，直接把异常抛给 Controller
-        return await ExecuteRequestAsync(request.Prompt, model, _config.VipApiKey, "VIP");
+        // 3. VIP 通道兜底
+        rawContent = await ExecuteRequestAsync(request.Prompt, model, _config.VipApiKey, "VIP", request.IsHtml);
+        
+        // 4. 清洗并返回
+        return CleanAiResponse(rawContent, request.IsHtml);
     }
 
-    private async Task<string> ExecuteRequestAsync(string prompt, string model, string apiKey, string channel)
+    // 修改：增加了 isHtml 参数
+    private async Task<string> ExecuteRequestAsync(string prompt, string model, string apiKey, string channel, bool isHtml)
     {
         if(string.IsNullOrEmpty(apiKey)) throw new Exception($"{channel} Key 未配置");
 
         var url = $"{_config.BaseUrl.TrimEnd('/')}/v1/chat/completions";
+
+        // --- 动态构建 System Prompt ---
+        string systemInstruction;
+        if (isHtml)
+        {
+            systemInstruction = @"你是一个专业的 HTML 代码生成器。
+规则：
+1. 只输出标准的 HTML 代码。
+2. 严禁使用 Markdown 代码块（不要写 ```html）。
+3. 严禁包含任何解释性文字。
+4. 自动为文章分段添加 <p> 标签。";
+        }
+        else
+        {
+            systemInstruction = @"你是一个有用的 AI 助手。请直接回答用户的问题。";
+        }
+
+        // --- 构建 Messages 数组 ---
         var requestBody = new
         {
             model = model,
-            messages = new[] { new { role = "user", content = prompt } },
+            messages = new[] 
+            { 
+                new { role = "system", content = systemInstruction },
+                new { role = "user", content = prompt } 
+            },
             temperature = 0.7
         };
 
@@ -71,7 +98,6 @@ public class NewApiService : IAIService
         
         if (!response.IsSuccessStatusCode)
         {
-            // 这里抛出的异常会被外面的 catch 捕获，从而触发降级逻辑
             var err = await response.Content.ReadAsStringAsync();
             throw new Exception($"HTTP {response.StatusCode} - {err}");
         }
@@ -88,7 +114,36 @@ public class NewApiService : IAIService
         }
     }
 
-    // 获取模型列表逻辑保持不变，依然是“我全都要”
+    /// <summary>
+    /// 清洗 AI 返回的数据 (Markdown -> HTML)
+    /// </summary>
+    private string CleanAiResponse(string content, bool isHtmlMode)
+    {
+        if (string.IsNullOrWhiteSpace(content)) return string.Empty;
+
+        // 1. 去掉 Markdown 代码块
+        content = Regex.Replace(content, @"```[a-zA-Z]*", "", RegexOptions.IgnoreCase);
+        content = content.Replace("```", "").Trim();
+
+        // 2. HTML 模式下的兜底逻辑
+        if (isHtmlMode)
+        {
+            // 如果内容里找不到 <p> 或 <div>，说明 AI 给了纯文本
+            bool hasHtmlTags = Regex.IsMatch(content, @"<[a-z][\s\S]*>", RegexOptions.IgnoreCase);
+
+            if (!hasHtmlTags)
+            {
+                // 把换行符变成 HTML 标签
+                var processed = content.Replace("\n\n", "</p><p>")
+                                       .Replace("\r\n\r\n", "</p><p>")
+                                       .Replace("\n", "<br/>");
+                content = $"<div class=\"ai-generated\"><p>{processed}</p></div>";
+            }
+        }
+        return content;
+    }
+
+    // GetModelsAsync 保持你原有的逻辑不变
     public async Task<List<string>> GetModelsAsync()
     {
         var tasks = new List<Task<List<string>>>();

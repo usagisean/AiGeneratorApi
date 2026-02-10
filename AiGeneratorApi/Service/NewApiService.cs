@@ -24,61 +24,75 @@ public class NewApiService : IAIService
         _httpClient.DefaultRequestHeaders.Accept.ParseAdd("application/json");
     }
 
-    public async Task<string> GenerateContentAsync(GenerateRequest request)
+   public async Task<string> GenerateContentAsync(GenerateRequest request)
     {
-        // 1. 确定模型
         var model = !string.IsNullOrEmpty(request.ModelName) ? request.ModelName : _config.DefaultModelId;
-
         string rawContent = "";
 
-        // 2. 【智能路由核心逻辑】
+        // =========================================================
+        // 核心修改：在这里拼接提示词！
+        // 如果是 HTML 模式，说明是要写文章，我们把用户输入的简单标题包装一下
+        // =========================================================
+        string finalPrompt = request.Prompt;
+        
+        if (request.IsHtml)
+        {
+            finalPrompt = BuildArticlePrompt(request.Prompt);
+        }
+
         // 优先尝试免费通道
         if (!string.IsNullOrEmpty(_config.FreeApiKey))
         {
             try
             {
-                // 注意：这里多传了 request.IsHtml 参数
-                rawContent = await ExecuteRequestAsync(request.Prompt, model, _config.FreeApiKey, "Free", request.IsHtml);
-                // 如果成功拿到内容，直接去清洗并返回
+                // 注意：这里传入的是 finalPrompt (包装后的)
+                rawContent = await ExecuteRequestAsync(finalPrompt, model, _config.FreeApiKey, "Free", request.IsHtml);
                 return CleanAiResponse(rawContent, request.IsHtml);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[SmartRoute] 免费通道无法服务 '{model}': {ex.Message} -> 正在切换 VIP 通道兜底...");
+                Console.WriteLine($"[SmartRoute] 免费通道异常: {ex.Message} -> 切换 VIP");
             }
         }
 
-        // 3. VIP 通道兜底
-        rawContent = await ExecuteRequestAsync(request.Prompt, model, _config.VipApiKey, "VIP", request.IsHtml);
-        
-        // 4. 清洗并返回
+        // VIP 通道兜底
+        rawContent = await ExecuteRequestAsync(finalPrompt, model, _config.VipApiKey, "VIP", request.IsHtml);
         return CleanAiResponse(rawContent, request.IsHtml);
     }
 
-    // 修改：增加了 isHtml 参数
+    // 私有方法：构建文章提示词模版
+    private string BuildArticlePrompt(string topic)
+    {
+        return $@"
+你是一名资深的新闻时评人。请根据我提供的【热点话题】，写一篇结构完整的深度评论文章。
+
+【热点话题】：
+{topic}
+
+【写作要求】：
+1. 拟定标题：根据话题自拟一个吸引人的标题，必须用 <h1> 标签包裹。
+2. 内容结构：
+   - 开篇：简述该话题反映的社会现象或背景。
+   - 分析：从社会、法律、人性等角度深度剖析（3-4段）。
+   - 结尾：总结全文，升华主题。
+3. 格式严格要求：
+   - 只输出 HTML 代码片段。
+   - 严禁 使用 Markdown 代码块标记（不要写 ```html）。
+   - 正文段落必须用 <p> 标签包裹。
+   - 重点金句可以用 <strong> 加粗。
+";
+    }
+
     private async Task<string> ExecuteRequestAsync(string prompt, string model, string apiKey, string channel, bool isHtml)
     {
         if(string.IsNullOrEmpty(apiKey)) throw new Exception($"{channel} Key 未配置");
 
         var url = $"{_config.BaseUrl.TrimEnd('/')}/v1/chat/completions";
 
-        // --- 动态构建 System Prompt ---
-        string systemInstruction;
-        if (isHtml)
-        {
-            systemInstruction = @"你是一个专业的 HTML 代码生成器。
-规则：
-1. 只输出标准的 HTML 代码。
-2. 严禁使用 Markdown 代码块（不要写 ```html）。
-3. 严禁包含任何解释性文字。
-4. 自动为文章分段添加 <p> 标签。";
-        }
-        else
-        {
-            systemInstruction = @"你是一个有用的 AI 助手。请直接回答用户的问题。";
-        }
+        string systemInstruction = isHtml 
+            ? "你是一个 HTML 生成器。只输出纯净的 HTML 代码，不要包含 Markdown 标记。" 
+            : "你是一个 AI 助手。";
 
-        // --- 构建 Messages 数组 ---
         var requestBody = new
         {
             model = model,
@@ -114,31 +128,25 @@ public class NewApiService : IAIService
         }
     }
 
-    /// <summary>
-    /// 清洗 AI 返回的数据 (Markdown -> HTML)
-    /// </summary>
     private string CleanAiResponse(string content, bool isHtmlMode)
     {
         if (string.IsNullOrWhiteSpace(content)) return string.Empty;
 
-        // 1. 去掉 Markdown 代码块
+        // 去掉 Markdown
         content = Regex.Replace(content, @"```[a-zA-Z]*", "", RegexOptions.IgnoreCase);
         content = content.Replace("```", "").Trim();
 
-        // 2. HTML 模式下的兜底逻辑
         if (isHtmlMode)
         {
-            // 如果内容里找不到 <p> 或 <div>，说明 AI 给了纯文本
+            // 兜底：如果没有标签，手动加
             bool hasHtmlTags = Regex.IsMatch(content, @"<[a-z][\s\S]*>", RegexOptions.IgnoreCase);
-
             if (!hasHtmlTags)
             {
-                // 把换行符变成 HTML 标签
-                var processed = content.Replace("\n\n", "</p><p>")
-                                       .Replace("\r\n\r\n", "</p><p>")
-                                       .Replace("\n", "<br/>");
+                var processed = content.Replace("\n\n", "</p><p>").Replace("\n", "<br/>");
                 content = $"<div class=\"ai-generated\"><p>{processed}</p></div>";
             }
+            // 暴力去换行
+            content = content.Replace("\r", "").Replace("\n", "");
         }
         return content;
     }

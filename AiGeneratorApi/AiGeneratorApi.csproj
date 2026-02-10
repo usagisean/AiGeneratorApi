@@ -27,8 +27,4 @@
     </None>
   </ItemGroup>
 
-  <ItemGroup>
-    <Content Include=".github\workflows\deploy.yml" />
-  </ItemGroup>
-
 </Project>

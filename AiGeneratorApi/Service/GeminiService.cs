@@ -26,7 +26,9 @@ public class GeminiService : IAIService
 
     public async Task<GenerateResult> GenerateContentAsync(GenerateRequest request)
     {
-        var targetModelId = !string.IsNullOrEmpty(request.ModelName) ? request.ModelName : _config.DefaultModelId;
+        var targetModelId = !string.IsNullOrEmpty(request.ModelName) ? request.ModelName 
+                           : !string.IsNullOrEmpty(_config.DefaultModelId) ? _config.DefaultModelId 
+                           : "gemini-2.5-flash";
         var channel = CreateGrpcChannel();
         var client = new PredictionServiceClientBuilder { CallInvoker = channel.CreateCallInvoker() }.Build();
         var modelResourceName = $"projects/{_config.ProjectId}/locations/{_config.Location}/publishers/google/models/{targetModelId}";

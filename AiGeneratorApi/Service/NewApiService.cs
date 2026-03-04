@@ -26,7 +26,10 @@ public class NewApiService : IAIService
 
     public async Task<GenerateResult> GenerateContentAsync(GenerateRequest request)
     {
-        var model = !string.IsNullOrEmpty(request.ModelName) ? request.ModelName : _config.DefaultModelId;
+        // 三层兜底：请求指定 → 配置默认 → 硬编码默认
+        var model = !string.IsNullOrEmpty(request.ModelName) ? request.ModelName 
+                  : !string.IsNullOrEmpty(_config.DefaultModelId) ? _config.DefaultModelId 
+                  : "gpt-4o-mini";
         string rawContent = "";
 
         // 根据模式构建不同的提示词

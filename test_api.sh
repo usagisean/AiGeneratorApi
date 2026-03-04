@@ -6,7 +6,7 @@
 
 # ⚠️ 请修改为你的实际配置
 BASE_URL="http://localhost:6677"
-API_KEY="3H9kQ!x2Z@pH4jT5wQ7mY&cG1"
+API_KEY=" apiley"
 
 # 通用请求头
 HEADERS="-H \"Content-Type: application/json\" -H \"x-api-key: ${API_KEY}\""

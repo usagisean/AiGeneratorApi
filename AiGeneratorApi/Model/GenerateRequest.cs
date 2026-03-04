@@ -20,7 +20,7 @@ public class GenerateRequest
     /// <summary>
     /// 模型名称，默认使用提供商配置的默认模型
     /// </summary>
-    public string ModelName { get; set; } = "gpt-4o-mini";
+    public string? ModelName { get; set; }
 
     /// <summary>
     /// 写作风格，默认新闻时评

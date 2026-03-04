@@ -16,10 +16,15 @@
 | `prompt` | string | ✅ | — | 文章主题 / 提示词 |
 | `provider` | string | ❌ | `"newapi"` | AI 提供商：`google` / `newapi` |
 | `style` | string | ❌ | `"news"` | 写作风格（见下表） |
-| `modelName` | string | ❌ | 配置默认 | 指定模型名称 |
+| `modelName` | string | ❌ | （见下方说明） | 指定模型名称 |
 | `wordCount` | int | ❌ | `1500` | 目标字数，0 = 不限 |
 | `language` | string | ❌ | `"zh"` | 语言：`zh` / `en` / `ja` |
 | `isHtml` | bool | ❌ | `true` | true = 生成结构化文章，false = 普通聊天 |
+
+> **💡 关于 `modelName` 的默认值：**
+> 如果请求体中**不传** `modelName`，系统将根据 `provider` 自动使用对应的默认模型：
+> - 当 `provider="newapi"` 时，默认使用 **`gpt-4o-mini`**（或其他在 VPS 配置的默认值）
+> - 当 `provider="google"` 时，默认使用 **`gemini-2.5-flash`**
 
 ### 可用写作风格 (`style`)
 

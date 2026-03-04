@@ -4,8 +4,8 @@ namespace AiGeneratorApi.Interface
 {
     public interface IAIService
     {
-        // 统一接口：传入 Request，返回生成的文本
-        Task<string> GenerateContentAsync(GenerateRequest request);
+        // 统一接口：传入 Request，返回结构化的生成结果（标题/正文/关键词/摘要）
+        Task<GenerateResult> GenerateContentAsync(GenerateRequest request);
         Task<List<string>> GetModelsAsync();
     }
 }

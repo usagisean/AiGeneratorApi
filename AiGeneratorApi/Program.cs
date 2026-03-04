@@ -42,7 +42,14 @@ builder.Services.AddKeyedScoped<IAIService, GeminiService>("google");
 // "newapi" -> NewApiService
 builder.Services.AddKeyedScoped<IAIService, NewApiService>("newapi");
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // 枚举序列化为字符串（如 "news" 而非 0），且支持忽略大小写
+        options.JsonSerializerOptions.Converters.Add(
+            new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase)
+        );
+    });
 builder.Services.AddEndpointsApiExplorer();
 
 // 5. 配置 Swagger (支持在页面右上角输入 API Key)

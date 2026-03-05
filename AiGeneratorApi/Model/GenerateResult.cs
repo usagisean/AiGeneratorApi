@@ -25,4 +25,9 @@ public class GenerateResult
     /// 文章摘要 / meta description，约 150 字以内
     /// </summary>
     public string Description { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 实际使用的模型名称（当指定模型不可用时降级为 fallback 模型，此字段非 null 表示发生了降级）
+    /// </summary>
+    public string? ActualModel { get; set; }
 }

@@ -14,6 +14,18 @@ public class NewApiService : IAIService
     private readonly HttpClient _httpClient;
     private readonly NewApiSettings _config;
 
+    // NOTE: 已知不支持文字生成的模型黑名单（图片、音频、推理等特殊模型）
+    private static readonly HashSet<string> NON_TEXT_MODELS = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "dall-e-3", "dall-e-2",
+        "sora",
+        "tts-1", "tts-1-hd",
+        "whisper-1",
+    };
+
+    // NOTE: 按优先级排列的可靠 fallback 模型，依次尝试直到成功
+    private static readonly string[] FALLBACK_MODELS = { "gpt-4o-mini", "gpt-4o", "deepseek-chat" };
+
     public NewApiService(IHttpClientFactory httpClientFactory, IOptions<AIConfig> config)
     {
         _httpClient = httpClientFactory.CreateClient();
@@ -27,31 +39,89 @@ public class NewApiService : IAIService
     public async Task<GenerateResult> GenerateContentAsync(GenerateRequest request)
     {
         // 三层兜底：请求指定 → 配置默认 → 硬编码默认（NewApi 用 gpt-4o-mini）
-        var model = !string.IsNullOrEmpty(request.ModelName) ? request.ModelName 
-                  : !string.IsNullOrEmpty(_config.DefaultModelId) ? _config.DefaultModelId 
-                  : "gpt-4o-mini";
-        string rawContent = "";
+        var requestedModel = !string.IsNullOrEmpty(request.ModelName) ? request.ModelName
+                           : !string.IsNullOrEmpty(_config.DefaultModelId) ? _config.DefaultModelId
+                           : "gpt-4o-mini";
 
         // 根据模式构建不同的提示词
         string finalPrompt = request.IsHtml ? BuildArticlePrompt(request) : request.Prompt;
 
-        // 优先尝试免费通道
-        if (!string.IsNullOrEmpty(_config.FreeApiKey))
+        // NOTE: 如果请求的是非文字模型，直接跳过，使用 fallback 策略，避免无谓的 API 调用
+        bool skipRequested = NON_TEXT_MODELS.Contains(requestedModel);
+        if (!skipRequested)
         {
+            // 优先尝试免费通道 + 指定模型
+            if (!string.IsNullOrEmpty(_config.FreeApiKey))
+            {
+                try
+                {
+                    var rawContent = await ExecuteRequestAsync(finalPrompt, requestedModel, _config.FreeApiKey, "Free", request.IsHtml);
+                    var result = ParseAiResponse(rawContent, request.IsHtml);
+                    result.ActualModel = requestedModel;
+                    return result;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[SmartRoute] 免费通道/{requestedModel} 异常: {ex.Message} -> 切换 VIP");
+                }
+            }
+
+            // VIP 通道 + 指定模型
             try
             {
-                rawContent = await ExecuteRequestAsync(finalPrompt, model, _config.FreeApiKey, "Free", request.IsHtml);
-                return ParseAiResponse(rawContent, request.IsHtml);
+                var rawContent = await ExecuteRequestAsync(finalPrompt, requestedModel, _config.VipApiKey, "VIP", request.IsHtml);
+                var result = ParseAiResponse(rawContent, request.IsHtml);
+                result.ActualModel = requestedModel;
+                return result;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[SmartRoute] 免费通道异常: {ex.Message} -> 切换 VIP");
+                Console.WriteLine($"[SmartRoute] VIP/{requestedModel} 异常: {ex.Message} -> 进入 Fallback 策略");
+            }
+        }
+        else
+        {
+            Console.WriteLine($"[SmartRoute] 模型 [{requestedModel}] 为非文字模型，跳过，直接进入 Fallback 策略");
+        }
+
+        // NOTE: Fallback 策略：依次尝试可靠模型列表，直到有一个成功
+        foreach (var fallbackModel in FALLBACK_MODELS)
+        {
+            // 免费通道 + fallback 模型
+            if (!string.IsNullOrEmpty(_config.FreeApiKey))
+            {
+                try
+                {
+                    Console.WriteLine($"[Fallback] 尝试免费通道/{fallbackModel}");
+                    var rawContent = await ExecuteRequestAsync(finalPrompt, fallbackModel, _config.FreeApiKey, "Free-Fallback", request.IsHtml);
+                    var result = ParseAiResponse(rawContent, request.IsHtml);
+                    // 标记实际使用的 fallback 模型，便于调用方日志追踪
+                    result.ActualModel = $"{fallbackModel}(fallback from {requestedModel})";
+                    return result;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Fallback] 免费通道/{fallbackModel} 失败: {ex.Message}");
+                }
+            }
+
+            // VIP 通道 + fallback 模型
+            try
+            {
+                Console.WriteLine($"[Fallback] 尝试 VIP 通道/{fallbackModel}");
+                var rawContent = await ExecuteRequestAsync(finalPrompt, fallbackModel, _config.VipApiKey, "VIP-Fallback", request.IsHtml);
+                var result = ParseAiResponse(rawContent, request.IsHtml);
+                result.ActualModel = $"{fallbackModel}(fallback from {requestedModel})";
+                return result;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Fallback] VIP/{fallbackModel} 失败: {ex.Message}");
             }
         }
 
-        // VIP 通道兜底
-        rawContent = await ExecuteRequestAsync(finalPrompt, model, _config.VipApiKey, "VIP", request.IsHtml);
-        return ParseAiResponse(rawContent, request.IsHtml);
+        // 所有 fallback 都耗尽，抛出异常让 Controller 返回 500
+        throw new Exception($"所有可用模型均已尝试失败，请求的模型为: {requestedModel}");
     }
 
     /// <summary>
@@ -86,16 +156,17 @@ public class NewApiService : IAIService
 
 【基本要求】：
 1. 标题：拟一个吸引人的、适合 SEO 的文章标题（纯文本，不带 HTML 标签）。
-2. 正文格式：使用 HTML 标签（<h2>小标题</h2>、<p>段落</p>、<strong>重点</strong>），不要包含 <h1>。
-3. 关键词：提取 5-8 个适合 SEO 的关键词，用英文逗号分隔。
-4. 摘要：写一段 120-150 字的文章摘要，适合用作 meta description。
-5. {wordCountHint}
-6. {languageHint}
+2. 正文格式：为了确保排版丰富美观，请随机搭配使用丰富的 HTML 标签（如 <h2>, <h3>, <h4>, <p>, <ul>, <li>, <blockquote>, <strong> 等），切忌只用单一标签排版。绝对不要包含 <h1> 标签。
+3. 样式要求：务必在生成的所有 HTML 标签中加入随机、多样且美观的内联 CSS 样式 `style='...'`。可以随机调整文字颜色、背景色、边距（margin/padding）、边框（border）、行高（line-height）、圆角（border-radius）等现代设计常用属性。
+4. 关键词：提取 5-8 个适合 SEO 的关键词，用英文逗号分隔。
+5. 摘要：写一段 120-150 字的文章摘要，适合用作 meta description。
+6. {wordCountHint}
+7. {languageHint}
 
 【输出格式】：严格按照以下 JSON 格式输出，不要添加任何 Markdown 代码块标记：
 {{
   ""title"": ""文章标题"",
-  ""content"": ""HTML 正文内容"",
+  ""content"": ""包含丰富内联样式的 HTML 正文内容"",
   ""keywords"": ""关键词1,关键词2,关键词3"",
   ""description"": ""文章摘要""
 }}";

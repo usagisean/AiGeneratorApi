@@ -40,13 +40,14 @@ public class GeneratorController : ControllerBase
 
         try
         {
-            // 3. 调用服务生成内容
+            // 3. 调用服务生成内容（服务层内部会自动 fallback）
             var result = await aiService.GenerateContentAsync(request);
 
             return Ok(ApiResponse<object>.Ok(new
             {
                 provider = request.Provider,
-                modelUsed = request.ModelName ?? "default",
+                // NOTE: 优先展示 result.ActualModel（服务层 fallback 后会设置此值），兜底用请求参数
+                modelUsed = result.ActualModel ?? request.ModelName ?? "default",
                 style = request.Style.ToString().ToLower(),
                 title = result.Title,
                 content = result.Content,

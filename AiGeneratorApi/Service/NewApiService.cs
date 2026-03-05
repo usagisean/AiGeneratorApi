@@ -156,9 +156,9 @@ public class NewApiService : IAIService
 
 【基本要求】：
 1. 标题：拟一个吸引人的、适合 SEO 的文章标题（纯文本，不带 HTML 标签）。
-2. 正文格式：为了确保排版丰富美观，请随机搭配使用丰富的 HTML 标签（如 <h2>, <h3>, <h4>, <p>, <ul>, <li>, <blockquote>, <strong> 等），切忌只用单一标签排版。绝对不要包含 <h1> 标签。
-3. 样式要求：务必在生成的所有 HTML 标签中加入随机、多样且美观的内联 CSS 样式 `style='...'`。可以随机调整文字颜色、背景色、边距（margin/padding）、边框（border）、行高（line-height）、圆角（border-radius）等现代设计常用属性。
-4. 关键词：提取 5-8 个适合 SEO 的关键词，用英文逗号分隔。
+2. 正文结构：整个正文必须用一个 <div> 作为最外层容器包裹。内部随机搭配 <h2>, <h3>, <h4>, <p>, <ul>, <li>, <blockquote>, <strong> 等标签，切忌只用单一标签排版。绝对不要包含 <h1> 标签。
+3. 样式要求：在所有 HTML 标签中加入随机且美观的内联 CSS 样式 `style='...'`，随机调整文字颜色、背景色、边距、边框、行高、圆角等属性。
+4. 关键词：提取 5-8 个适合 SEO 的关键词，用英文逗号分隔。【严禁】将这些关键词直接堆砌在正文中，关键词只能出现在 JSON 的 keywords 字段，正文内容中禁止出现关键词列表。
 5. 摘要：写一段 120-150 字的文章摘要，适合用作 meta description。
 6. {wordCountHint}
 7. {languageHint}
@@ -166,7 +166,7 @@ public class NewApiService : IAIService
 【输出格式】：严格按照以下 JSON 格式输出，不要添加任何 Markdown 代码块标记：
 {{
   ""title"": ""文章标题"",
-  ""content"": ""包含丰富内联样式的 HTML 正文内容"",
+  ""content"": ""<div>...</div> 包裹的完整 HTML 正文（带内联样式）"",
   ""keywords"": ""关键词1,关键词2,关键词3"",
   ""description"": ""文章摘要""
 }}";

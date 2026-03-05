@@ -125,52 +125,57 @@ public class NewApiService : IAIService
     }
 
     /// <summary>
-    /// 构建带有风格和字数要求的结构化 JSON 文章提示词
+    /// 构建文章生成提示词
+    /// NOTE: 提示词针对蜘蛛池场景设计，要求 AI 以真人视角写作，完全避免机器写作痕迹
     /// </summary>
     private string BuildArticlePrompt(GenerateRequest request)
     {
         var role = request.Style.GetRoleDescription();
         var instruction = request.Style.GetWritingInstruction();
 
-        // 字数要求：0 表示不限制
         var wordCountHint = request.WordCount > 0
-            ? $"文章正文目标字数约 {request.WordCount} 字。"
-            : "文章长度不限，根据话题深度自行把握。";
+            ? $"字数目标约 {request.WordCount} 字，可适当浮动。"
+            : "字数根据话题深度自然把握，不做硬性限制。";
 
-        // 语言要求
         var languageHint = request.Language switch
         {
-            "en" => "请用英文写作。",
-            "ja" => "请用日文写作。",
-            _ => "请用简体中文写作。"
+            "en" => "Write in English.",
+            "ja" => "日本語で書いてください。",
+            _ => "使用简体中文写作。"
         };
 
         return $@"
-你是一名{role}兼 SEO 专家。请根据我提供的【话题】，写一篇结构完整的文章。
+你是一位{role}，正在为自己的个人博客撰写一篇文章。
 
-【话题】：
-{request.Prompt}
+话题：{request.Prompt}
 
-【写作风格要求】：
+写作要求：
 {instruction}
+{wordCountHint}
+{languageHint}
 
-【基本要求】：
-1. 标题：拟一个吸引人的、适合 SEO 的文章标题（纯文本，不带 HTML 标签）。
-2. 正文结构：整个正文必须用一个 <div> 作为最外层容器包裹。内部随机搭配 <h2>, <h3>, <h4>, <p>, <ul>, <li>, <blockquote>, <strong> 等标签，切忌只用单一标签排版。绝对不要包含 <h1> 标签。
-3. 样式要求：在所有 HTML 标签中加入随机且美观的内联 CSS 样式 `style='...'`，随机调整文字颜色、背景色、边距、边框、行高、圆角等属性。
-4. 关键词：提取 5-8 个适合 SEO 的关键词，用英文逗号分隔。【严禁】将这些关键词直接堆砌在正文中，关键词只能出现在 JSON 的 keywords 字段，正文内容中禁止出现关键词列表。
-5. 摘要：写一段 120-150 字的文章摘要，适合用作 meta description。
-6. {wordCountHint}
-7. {languageHint}
+正文 HTML 格式规范（严格遵守）：
+- 正文由多个独立区块组成，每个区块用 <div> 包裹，不同区块可以有不同的背景色或边框风格
+- 每个 <div> 区块内部，灵活使用 <h2>、<h3>、<h4>、<p>、<ul>、<li>、<blockquote>、<strong>、<em> 等标签组织内容
+- 不同标签之间自然穿插，富有层次感，绝不只使用单一标签堆砌
+- 每个 HTML 标签都必须附带随机的 style 属性，风格各异，例如调整颜色、字号、边距、行高、圆角、背景色等
+- 禁止使用 <h1> 标签
 
-【输出格式】：严格按照以下 JSON 格式输出，不要添加任何 Markdown 代码块标记：
+内容红线（违反则重写）：
+- 文章是真人写的博客，绝对不能出现任何暗示机器生成或营销目的的词汇，包括但不限于：SEO、关键词、搜索引擎、元描述、锚文本、外链、收录、蜘蛛、爬虫、流量、变现、营销
+- 不要在文章任何位置列出关键词清单
+- 不要用「本文」「本篇」「笔者」等刻板开头，直接讲内容
+- 摘要只填充一段自然的引言，读起来像文章开篇第一段
+
+严格按照以下 JSON 格式输出（禁止添加任何 Markdown 标记或额外说明）：
 {{
-  ""title"": ""文章标题"",
-  ""content"": ""<div>...</div> 包裹的完整 HTML 正文（带内联样式）"",
-  ""keywords"": ""关键词1,关键词2,关键词3"",
-  ""description"": ""文章摘要""
+  ""title"": ""吸引人的文章标题（纯文本）"",
+  ""content"": ""由多个 <div> 区块组成的完整 HTML 正文（每个标签都有随机 style）"",
+  ""keywords"": ""5到8个自然词汇（逗号分隔，仅供内部使用，不出现在文章中）"",
+  ""description"": ""100到150字的引言式摘要，读起来像文章第一段""
 }}";
     }
+
 
     /// <summary>
     /// 解析 AI 返回内容为结构化结果

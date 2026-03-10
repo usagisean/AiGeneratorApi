@@ -30,4 +30,9 @@ public class GenerateResult
     /// 实际使用的模型名称（当指定模型不可用时降级为 fallback 模型，此字段非 null 表示发生了降级）
     /// </summary>
     public string? ActualModel { get; set; }
+
+    /// <summary>
+    /// 基于文章内容生成的 4 条有趣用户评论
+    /// </summary>
+    public List<string> Comments { get; set; } = new();
 }

@@ -52,7 +52,8 @@ public class GeneratorController : ControllerBase
                 title = result.Title,
                 content = result.Content,
                 keywords = result.Keywords,
-                description = result.Description
+                description = result.Description,
+                comments = result.Comments
             }));
         }
         catch (Exception ex)

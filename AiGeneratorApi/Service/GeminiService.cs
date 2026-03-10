@@ -159,13 +159,15 @@ public class GeminiService : IAIService
 - 不要在文章任何位置列出关键词清单
 - 不要用「本文」「本篇」「笔者」等刻板开头，直接讲内容
 - 摘要只填充一段自然的引言，读起来像文章开篇第一段
+- 必须基于生成的文章内容，补充 4 条逼真、有趣、符合读者视角的评论
 
 严格按照以下 JSON 格式输出（禁止添加任何 Markdown 标记或额外说明）：
 {{
   ""title"": ""吸引人的文章标题（纯文本）"",
   ""content"": ""由多个 <div> 区块组成的完整 HTML 正文（每个标签都有随机 style）"",
   ""keywords"": ""5到8个自然词汇（逗号分隔，仅供内部使用，不出现在文章中）"",
-  ""description"": ""100到150字的引言式摘要，读起来像文章第一段""
+  ""description"": ""100到150字的引言式摘要，读起来像文章第一段"",
+  ""comments"": [""结合文章内容的有趣用户评论1"", ""评论2"", ""评论3"", ""评论4""]
 }}";
     }
 
@@ -202,7 +204,8 @@ public class GeminiService : IAIService
                     Title = jsonNode["title"]?.ToString() ?? "",
                     Content = jsonNode["content"]?.ToString() ?? "",
                     Keywords = jsonNode["keywords"]?.ToString() ?? "",
-                    Description = jsonNode["description"]?.ToString() ?? ""
+                    Description = jsonNode["description"]?.ToString() ?? "",
+                    Comments = jsonNode["comments"]?.AsArray().Select(n => n?.ToString() ?? "").ToList() ?? new List<string>()
                 };
 
                 result.Content = CleanHtmlContent(result.Content);

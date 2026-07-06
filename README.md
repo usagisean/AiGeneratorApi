@@ -10,6 +10,7 @@
 4. 服务端通过 NewAPI / LiteLLM / NVIDIA NIM 渠道执行底层模型调用。
 
 默认 provider 是 `newapi`，默认模型是 `z-ai/glm-5.2`。Google provider 保留代码兼容，但默认禁用。
+模型列表默认会实时请求 NewAPI `/v1/models`，并和本服务内置的重点模型合并去重后返回给客户端。
 
 ## 主要接口
 
@@ -101,7 +102,7 @@ docker run --rm -p 6677:8080 \
   -e MY_API_KEY="<你的访问 API Key>" \
   -e AIConfig__NewApi__BaseUrl="https://api.zxaihub.com" \
   -e AIConfig__NewApi__DefaultModelId="z-ai/glm-5.2" \
-  -e AIConfig__NewApi__FetchRemoteModels="false" \
+  -e AIConfig__NewApi__FetchRemoteModels="true" \
   -e AIConfig__NewApi__FreeApiKey="<可选>" \
   -e AIConfig__NewApi__VipApiKey="<可选>" \
   -e AIConfig__Gemini__Enabled="false" \
@@ -120,7 +121,7 @@ docker run --rm -p 6677:8080 \
 
 建议：
 
-- `AIConfig__NewApi__FetchRemoteModels=false`：模型列表由本服务配置返回，避免客户端拿模型列表依赖上游实时状态
+- `AIConfig__NewApi__FetchRemoteModels=true`：默认实时拉取 NewAPI 全量模型，并合并本服务内置重点模型；如需只返回固定列表可改为 `false`
 - `AIConfig__Gemini__Enabled=false`：生产默认不依赖 Google
 - `AIConfig__NewApi__RequestTimeoutSeconds=300`
 - `AIConfig__NewApi__ModelListTimeoutSeconds=10`

@@ -38,7 +38,7 @@
 
 ### 当前 NewAPI 模型列表
 
-默认由服务配置返回，首项为默认模型：
+默认会实时请求 NewAPI `/v1/models` 拉取全量模型，并和本服务内置重点模型合并去重。下面是内置重点模型，实际返回数量会随 NewAPI 后台配置变化：
 
 ```text
 z-ai/glm-5.2
@@ -133,11 +133,12 @@ openai/gpt-oss-20b
   "timestamp": "...",
   "data": {
     "provider": "newapi",
-    "count": 11,
+    "count": 42,
     "models": [
       "z-ai/glm-5.2",
       "deepseek-ai/deepseek-v4-flash",
-      "deepseek-ai/deepseek-v4-pro"
+      "deepseek-ai/deepseek-v4-pro",
+      "..."
     ]
   }
 }

@@ -32,4 +32,29 @@ public static class NewApiModelDefaults
         "moonshotai/kimi-k2.6",
         "openai/gpt-oss-120b"
     ];
+
+    /// <summary>
+    /// 线上实测会 fallback 或超时的模型/别名。默认不返回给客户端，避免用户选到不可用模型。
+    /// </summary>
+    public static readonly string[] ExcludedModels =
+    [
+        "bytedance/seed-oss-36b-instruct",
+        "gemma-pro",
+        "glm-4",
+        "glm-5",
+        "gpt-4o",
+        "gpt-4o-mini",
+        "gpt-5",
+        "gpt-oss",
+        "kimi",
+        "meta/llama-3.3-70b-instruct",
+        "microsoft/phi-4-mini-instruct",
+        "minimax",
+        "nemotron-ultra",
+        "o1",
+        "o1-mini",
+        "phi-mini",
+        "turbo-chat",
+        "vision-lite"
+    ];
 }

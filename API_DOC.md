@@ -38,7 +38,7 @@
 
 ### 当前 NewAPI 模型列表
 
-默认会实时请求 NewAPI `/v1/models` 拉取全量模型，并和本服务内置重点模型合并去重。下面是内置重点模型，实际返回数量会随 NewAPI 后台配置变化：
+默认会实时请求 NewAPI `/v1/models` 拉取全量模型，并和本服务内置重点模型合并去重，然后过滤掉线上实测会 fallback 或 timeout 的模型。当前返回的是直连成功模型。完整测试说明见 `MODEL_GUIDE.md`。
 
 ```text
 z-ai/glm-5.2
@@ -133,7 +133,7 @@ openai/gpt-oss-20b
   "timestamp": "...",
   "data": {
     "provider": "newapi",
-    "count": 42,
+    "count": 27,
     "models": [
       "z-ai/glm-5.2",
       "deepseek-ai/deepseek-v4-flash",

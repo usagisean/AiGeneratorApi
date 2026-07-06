@@ -8,6 +8,7 @@ public class NewApiSettings
     public string DefaultModelId { get; set; } = NewApiModelDefaults.DefaultModelId;
     public List<string> Models { get; set; } = NewApiModelDefaults.KnownModels.ToList();
     public List<string> FallbackModels { get; set; } = NewApiModelDefaults.FallbackModels.ToList();
+    public List<string> ExcludedModels { get; set; } = NewApiModelDefaults.ExcludedModels.ToList();
     public bool FetchRemoteModels { get; set; } = true;
     public int RequestTimeoutSeconds { get; set; } = 300;
     public int ModelListTimeoutSeconds { get; set; } = 10;

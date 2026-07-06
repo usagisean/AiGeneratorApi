@@ -10,7 +10,9 @@
 4. 服务端通过 NewAPI / LiteLLM / NVIDIA NIM 渠道执行底层模型调用。
 
 默认 provider 是 `newapi`，默认模型是 `z-ai/glm-5.2`。Google provider 保留代码兼容，但默认禁用。
-模型列表默认会实时请求 NewAPI `/v1/models`，并和本服务内置的重点模型合并去重后返回给客户端。
+模型列表默认会实时请求 NewAPI `/v1/models`，并和本服务内置的重点模型合并去重，再过滤掉实测 fallback / timeout 的不可靠模型后返回给客户端。
+
+模型实测说明见：[`MODEL_GUIDE.md`](./MODEL_GUIDE.md)。
 
 ## 主要接口
 
@@ -26,19 +28,21 @@ x-api-key: <MY_API_KEY>
 
 ## 默认 NewAPI 模型
 
-配置集中在 `AIConfig:NewApi`，默认模型列表包括：
+配置集中在 `AIConfig:NewApi`。2026-07-06 线上逐个测试后，当前推荐优先展示：
 
 - `z-ai/glm-5.2`
-- `deepseek-ai/deepseek-v4-flash`
-- `deepseek-ai/deepseek-v4-pro`
 - `qwen/qwen3.5-122b-a10b`
-- `qwen/qwen3.5-397b-a17b`
-- `moonshotai/kimi-k2.6`
+- `deepseek-ai/deepseek-v4-flash`
 - `minimaxai/minimax-m3`
-- `nvidia/nemotron-3-ultra-550b-a55b`
+- `moonshotai/kimi-k2.6`
 - `nvidia/nemotron-3-super-120b-a12b`
 - `openai/gpt-oss-120b`
-- `openai/gpt-oss-20b`
+
+`/api/v1/models?provider=newapi` 当前会返回 **27 个直连成功模型**。以下类型会被默认过滤：
+
+- 调用后实际 fallback 到其他模型的短别名，例如 `gpt-4o`、`gpt-5`、`glm-5`、`kimi`
+- 90 秒内无响应的超时模型
+- 明显不适合当前文本生成链路的模型别名
 
 不传 `modelName` 时使用 `AIConfig__NewApi__DefaultModelId`，当前默认是 `z-ai/glm-5.2`。
 
@@ -132,4 +136,5 @@ docker run --rm -p 6677:8080 \
 AIConfig__NewApi__Models__0=z-ai/glm-5.2
 AIConfig__NewApi__Models__1=deepseek-ai/deepseek-v4-flash
 AIConfig__NewApi__FallbackModels__0=z-ai/glm-5.2
+AIConfig__NewApi__ExcludedModels__0=gpt-4o
 ```

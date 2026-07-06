@@ -393,6 +393,7 @@ public class NewApiService : IAIService
     {
         var result = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var excluded = GetExcludedModels();
 
         AddModel(GetDefaultModel());
 
@@ -419,6 +420,11 @@ public class NewApiService : IAIService
             }
 
             var normalized = model.Trim();
+            if (excluded.Contains(normalized))
+            {
+                return;
+            }
+
             if (seen.Add(normalized))
             {
                 result.Add(normalized);
@@ -438,6 +444,19 @@ public class NewApiService : IAIService
         return string.IsNullOrWhiteSpace(_config.BaseUrl)
             ? NewApiModelDefaults.DefaultBaseUrl
             : _config.BaseUrl.TrimEnd('/');
+    }
+
+    private HashSet<string> GetExcludedModels()
+    {
+        IEnumerable<string> excludedModels = _config.ExcludedModels is { Count: > 0 }
+            ? _config.ExcludedModels
+            : NewApiModelDefaults.ExcludedModels;
+
+        return new HashSet<string>(
+            excludedModels
+                .Where(model => !string.IsNullOrWhiteSpace(model))
+                .Select(model => model.Trim()),
+            StringComparer.OrdinalIgnoreCase);
     }
 
     private static List<string> ParseComments(JsonNode? node)

@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using AiGeneratorApi.Interface;
 using AiGeneratorApi.Model;
+using Microsoft.Extensions.Options;
 
 namespace AiGeneratorApi.Controllers;
 
@@ -9,10 +10,12 @@ namespace AiGeneratorApi.Controllers;
 public class GeneratorController : ControllerBase
 {
     private readonly IServiceProvider _serviceProvider;
+    private readonly AIConfig _config;
 
-    public GeneratorController(IServiceProvider serviceProvider)
+    public GeneratorController(IServiceProvider serviceProvider, IOptions<AIConfig> config)
     {
         _serviceProvider = serviceProvider;
+        _config = config.Value;
     }
 
     /// <summary>
@@ -29,10 +32,11 @@ public class GeneratorController : ControllerBase
         }
 
         // 2. 获取对应的 AI 服务
-        var aiService = _serviceProvider.GetKeyedService<IAIService>(request.Provider);
+        var provider = NormalizeProvider(request.Provider);
+        var aiService = _serviceProvider.GetKeyedService<IAIService>(provider);
         if (aiService == null)
         {
-            var supported = new[] { "google", "newapi" };
+            var supported = GetSupportedProviders();
             return BadRequest(ApiResponse<object>.Fail(
                 $"不支持的提供商: {request.Provider}。可选值: {string.Join(", ", supported)}"
             ));
@@ -45,7 +49,7 @@ public class GeneratorController : ControllerBase
 
             return Ok(ApiResponse<object>.Ok(new
             {
-                provider = request.Provider,
+                provider = provider,
                 // NOTE: 优先展示 result.ActualModel（服务层 fallback 后会设置此值），兜底用请求参数
                 modelUsed = result.ActualModel ?? request.ModelName ?? "default",
                 style = request.Style.ToString().ToLower(),
@@ -69,10 +73,11 @@ public class GeneratorController : ControllerBase
     [HttpGet("models")]
     public async Task<IActionResult> GetModels([FromQuery] string provider = "newapi")
     {
+        provider = NormalizeProvider(provider);
         var aiService = _serviceProvider.GetKeyedService<IAIService>(provider);
         if (aiService == null)
         {
-            return BadRequest(ApiResponse<object>.Fail($"不支持的提供商: {provider}"));
+            return BadRequest(ApiResponse<object>.Fail($"不支持的提供商: {provider}。可选值: {string.Join(", ", GetSupportedProviders())}"));
         }
 
         try
@@ -110,5 +115,23 @@ public class GeneratorController : ControllerBase
             count = styles.Count(),
             styles = styles
         }, "获取成功"));
+    }
+
+    private static string NormalizeProvider(string? provider)
+    {
+        return string.IsNullOrWhiteSpace(provider)
+            ? "newapi"
+            : provider.Trim().ToLowerInvariant();
+    }
+
+    private string[] GetSupportedProviders()
+    {
+        var providers = new List<string> { "newapi" };
+        if (_config.Gemini.Enabled)
+        {
+            providers.Add("google");
+        }
+
+        return providers.ToArray();
     }
 }

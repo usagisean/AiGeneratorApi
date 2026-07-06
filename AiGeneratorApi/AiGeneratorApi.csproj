@@ -22,9 +22,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update=".env">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
+    <Content Remove=".env" />
+    <Content Remove="gcp-key.json" />
+    <None Remove=".env" />
+    <None Remove="gcp-key.json" />
   </ItemGroup>
 
 </Project>

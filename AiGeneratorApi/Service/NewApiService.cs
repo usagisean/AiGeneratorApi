@@ -13,6 +13,7 @@ public class NewApiService : IAIService
 {
     private readonly HttpClient _httpClient;
     private readonly NewApiSettings _config;
+    private readonly ILogger<NewApiService> _logger;
 
     // NOTE: 已知不支持文字生成的模型黑名单（图片、音频、推理等特殊模型）
     private static readonly HashSet<string> NON_TEXT_MODELS = new(StringComparer.OrdinalIgnoreCase)
@@ -23,25 +24,29 @@ public class NewApiService : IAIService
         "whisper-1",
     };
 
-    // NOTE: 按优先级排列的可靠 fallback 模型，依次尝试直到成功
-    private static readonly string[] FALLBACK_MODELS = { "gpt-4o-mini", "gpt-4o", "deepseek-chat" };
-
-    public NewApiService(IHttpClientFactory httpClientFactory, IOptions<AIConfig> config)
+    public NewApiService(IHttpClientFactory httpClientFactory, IOptions<AIConfig> config, ILogger<NewApiService> logger)
     {
-        _httpClient = httpClientFactory.CreateClient();
+        _httpClient = httpClientFactory.CreateClient("NewApiClient");
         _config = config.Value.NewApi;
+        _logger = logger;
 
-        // 保持之前的伪装
-        _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-        _httpClient.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+        if (!_httpClient.DefaultRequestHeaders.UserAgent.Any())
+        {
+            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("AiGeneratorApi/1.0");
+        }
+
+        if (!_httpClient.DefaultRequestHeaders.Accept.Any())
+        {
+            _httpClient.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+        }
     }
 
     public async Task<GenerateResult> GenerateContentAsync(GenerateRequest request)
     {
-        // 三层兜底：请求指定 → 配置默认 → 硬编码默认（NewApi 用 gpt-4o-mini）
-        var requestedModel = !string.IsNullOrEmpty(request.ModelName) ? request.ModelName
-                           : !string.IsNullOrEmpty(_config.DefaultModelId) ? _config.DefaultModelId
-                           : "gpt-4o-mini";
+        // 三层兜底：请求指定 → 配置默认 → 代码默认（NewAPI 用 z-ai/glm-5.2）
+        var requestedModel = !string.IsNullOrWhiteSpace(request.ModelName) ? request.ModelName.Trim()
+                           : !string.IsNullOrWhiteSpace(_config.DefaultModelId) ? _config.DefaultModelId.Trim()
+                           : NewApiModelDefaults.DefaultModelId;
 
         // 根据模式构建不同的提示词
         string finalPrompt = request.IsHtml ? BuildArticlePrompt(request) : request.Prompt;
@@ -62,7 +67,7 @@ public class NewApiService : IAIService
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[SmartRoute] 免费通道/{requestedModel} 异常: {ex.Message} -> 切换 VIP");
+                    _logger.LogWarning(ex, "NewAPI free channel failed for model {Model}; switching to VIP channel", requestedModel);
                 }
             }
 
@@ -76,23 +81,23 @@ public class NewApiService : IAIService
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[SmartRoute] VIP/{requestedModel} 异常: {ex.Message} -> 进入 Fallback 策略");
+                _logger.LogWarning(ex, "NewAPI VIP channel failed for model {Model}; entering fallback strategy", requestedModel);
             }
         }
         else
         {
-            Console.WriteLine($"[SmartRoute] 模型 [{requestedModel}] 为非文字模型，跳过，直接进入 Fallback 策略");
+            _logger.LogWarning("NewAPI requested model {Model} is marked as non-text; entering fallback strategy", requestedModel);
         }
 
-        // NOTE: Fallback 策略：依次尝试可靠模型列表，直到有一个成功
-        foreach (var fallbackModel in FALLBACK_MODELS)
+        // NOTE: Fallback 策略：依次尝试配置中的可靠模型列表，直到有一个成功
+        foreach (var fallbackModel in GetFallbackModels(requestedModel))
         {
             // 免费通道 + fallback 模型
             if (!string.IsNullOrEmpty(_config.FreeApiKey))
             {
                 try
                 {
-                    Console.WriteLine($"[Fallback] 尝试免费通道/{fallbackModel}");
+                    _logger.LogInformation("NewAPI fallback trying free channel with model {Model}", fallbackModel);
                     var rawContent = await ExecuteRequestAsync(finalPrompt, fallbackModel, _config.FreeApiKey, "Free-Fallback", request.IsHtml);
                     var result = ParseAiResponse(rawContent, request.IsHtml);
                     // 标记实际使用的 fallback 模型，便于调用方日志追踪
@@ -101,14 +106,14 @@ public class NewApiService : IAIService
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[Fallback] 免费通道/{fallbackModel} 失败: {ex.Message}");
+                    _logger.LogWarning(ex, "NewAPI fallback free channel failed for model {Model}", fallbackModel);
                 }
             }
 
             // VIP 通道 + fallback 模型
             try
             {
-                Console.WriteLine($"[Fallback] 尝试 VIP 通道/{fallbackModel}");
+                _logger.LogInformation("NewAPI fallback trying VIP channel with model {Model}", fallbackModel);
                 var rawContent = await ExecuteRequestAsync(finalPrompt, fallbackModel, _config.VipApiKey, "VIP-Fallback", request.IsHtml);
                 var result = ParseAiResponse(rawContent, request.IsHtml);
                 result.ActualModel = $"{fallbackModel}(fallback from {requestedModel})";
@@ -116,7 +121,7 @@ public class NewApiService : IAIService
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Fallback] VIP/{fallbackModel} 失败: {ex.Message}");
+                _logger.LogWarning(ex, "NewAPI fallback VIP channel failed for model {Model}", fallbackModel);
             }
         }
 
@@ -218,7 +223,7 @@ public class NewApiService : IAIService
                     Content = jsonNode["content"]?.ToString() ?? "",
                     Keywords = jsonNode["keywords"]?.ToString() ?? "",
                     Description = jsonNode["description"]?.ToString() ?? "",
-                    Comments = jsonNode["comments"]?.AsArray().Select(n => n?.ToString() ?? "").ToList() ?? new List<string>()
+                    Comments = ParseComments(jsonNode["comments"])
                 };
 
                 // 对 content 执行 HTML 清洗
@@ -229,7 +234,7 @@ public class NewApiService : IAIService
         catch (JsonException)
         {
             // JSON 解析失败，回退到旧逻辑：整段当作 content
-            Console.WriteLine("[NewApi Warning] AI 返回的不是有效 JSON，回退到纯文本模式");
+            _logger.LogWarning("NewAPI response is not valid JSON; falling back to plain content mode");
         }
 
         // 回退：解析失败时把整个响应当作 content
@@ -267,7 +272,7 @@ public class NewApiService : IAIService
     {
         if(string.IsNullOrEmpty(apiKey)) throw new Exception($"{channel} Key 未配置");
 
-        var url = $"{_config.BaseUrl.TrimEnd('/')}/v1/chat/completions";
+        var url = $"{GetBaseUrl()}/v1/chat/completions";
 
         // HTML 模式要求返回 JSON，所以 system 指令也相应调整
         string systemInstruction = isHtml 
@@ -309,9 +314,17 @@ public class NewApiService : IAIService
         }
     }
 
-    // GetModelsAsync 保持原有逻辑不变
     public async Task<List<string>> GetModelsAsync()
     {
+        IEnumerable<string> modelSource = _config.Models is { Count: > 0 }
+            ? _config.Models
+            : NewApiModelDefaults.KnownModels;
+        var configuredModels = NormalizeModelList(modelSource);
+        if (!_config.FetchRemoteModels)
+        {
+            return configuredModels;
+        }
+
         var tasks = new List<Task<List<string>>>();
 
         if (!string.IsNullOrEmpty(_config.FreeApiKey)) 
@@ -322,26 +335,25 @@ public class NewApiService : IAIService
 
         await Task.WhenAll(tasks);
 
-        var allModels = new HashSet<string>();
+        var allModels = new List<string>(configuredModels);
         foreach (var task in tasks)
         {
-            foreach (var model in task.Result) allModels.Add(model);
+            allModels.AddRange(task.Result);
         }
 
-        if (allModels.Count == 0) return new List<string> { _config.DefaultModelId };
-        
-        return allModels.OrderBy(x => x).ToList();
+        return NormalizeModelList(allModels);
     }
 
     private async Task<List<string>> FetchModelsByKeyAsync(string apiKey, string channelName)
     {
-        var url = $"{_config.BaseUrl.TrimEnd('/')}/v1/models";
+        var url = $"{GetBaseUrl()}/v1/models";
         var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var timeoutSeconds = Math.Clamp(_config.ModelListTimeoutSeconds, 3, 60);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
             var response = await _httpClient.SendAsync(request, cts.Token);
             response.EnsureSuccessStatusCode();
             
@@ -361,8 +373,89 @@ public class NewApiService : IAIService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[NewApi Warning] {channelName} 获取模型列表失败: {ex.Message}");
+            _logger.LogWarning(ex, "NewAPI {ChannelName} failed to fetch remote model list", channelName);
             return new List<string>();
         }
+    }
+
+    private List<string> GetFallbackModels(string requestedModel)
+    {
+        IEnumerable<string> configuredFallbacks = _config.FallbackModels is { Count: > 0 } fallbackModels
+            ? fallbackModels
+            : NewApiModelDefaults.FallbackModels;
+
+        return NormalizeModelList(configuredFallbacks)
+            .Where(model => !model.Equals(requestedModel, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    private List<string> NormalizeModelList(IEnumerable<string>? models)
+    {
+        var result = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        AddModel(GetDefaultModel());
+
+        if (models != null)
+        {
+            foreach (var model in models)
+            {
+                AddModel(model);
+            }
+        }
+
+        if (result.Count == 0)
+        {
+            AddModel(NewApiModelDefaults.DefaultModelId);
+        }
+
+        return result;
+
+        void AddModel(string? model)
+        {
+            if (string.IsNullOrWhiteSpace(model))
+            {
+                return;
+            }
+
+            var normalized = model.Trim();
+            if (seen.Add(normalized))
+            {
+                result.Add(normalized);
+            }
+        }
+    }
+
+    private string GetDefaultModel()
+    {
+        return string.IsNullOrWhiteSpace(_config.DefaultModelId)
+            ? NewApiModelDefaults.DefaultModelId
+            : _config.DefaultModelId.Trim();
+    }
+
+    private string GetBaseUrl()
+    {
+        return string.IsNullOrWhiteSpace(_config.BaseUrl)
+            ? NewApiModelDefaults.DefaultBaseUrl
+            : _config.BaseUrl.TrimEnd('/');
+    }
+
+    private static List<string> ParseComments(JsonNode? node)
+    {
+        if (node is null)
+        {
+            return new List<string>();
+        }
+
+        if (node is JsonArray array)
+        {
+            return array
+                .Select(item => item?.ToString() ?? string.Empty)
+                .Where(item => !string.IsNullOrWhiteSpace(item))
+                .ToList();
+        }
+
+        var text = node.ToString();
+        return string.IsNullOrWhiteSpace(text) ? new List<string>() : new List<string> { text };
     }
 }

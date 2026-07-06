@@ -6,41 +6,63 @@ using DotNetEnv;
 using Microsoft.OpenApi.Models;
 
 // 1. 加载 .env 环境变量
-Env.Load();
+// 支持从仓库根目录运行（./AiGeneratorApi/.env）或从项目目录运行（./.env）。
+// 生产环境建议直接注入环境变量，不需要把 .env 打包进镜像或发布目录。
+LoadLocalEnvFile();
 
 var builder = WebApplication.CreateBuilder(args);
 
 // 2. 注入配置 (绑定 appsettings.json 或环境变量到 AIConfig 类)
 builder.Services.Configure<AIConfig>(builder.Configuration.GetSection("AIConfig"));
 
-// 3. 配置智能 HttpClient (Gemini 专用，自动识别代理)
-string? proxyUrl = builder.Configuration["AIConfig:Gemini:ProxyUrl"];
-builder.Services.AddHttpClient("GeminiClient", client => 
-{ 
-    client.Timeout = TimeSpan.FromMinutes(5); // 设置超时防止长文生成中断
-})
-.ConfigurePrimaryHttpMessageHandler(() =>
+// 3. 配置 NewAPI HttpClient（OpenAI-compatible / LiteLLM）
+var configuredNewApiBaseUrl = builder.Configuration["AIConfig:NewApi:BaseUrl"];
+var newApiBaseUrl = string.IsNullOrWhiteSpace(configuredNewApiBaseUrl)
+    ? NewApiModelDefaults.DefaultBaseUrl
+    : configuredNewApiBaseUrl;
+var newApiTimeoutSeconds = builder.Configuration.GetValue<int?>("AIConfig:NewApi:RequestTimeoutSeconds") ?? 300;
+builder.Services.AddHttpClient("NewApiClient", client =>
 {
-    // 如果配置了代理地址 (本地开发)，则使用代理
-    if (!string.IsNullOrEmpty(proxyUrl))
-    {
-        Console.WriteLine($"[System] 代理已启用: {proxyUrl}");
-        return new HttpClientHandler 
-        { 
-            Proxy = new System.Net.WebProxy(proxyUrl), 
-            UseProxy = true 
-        };
-    }
-    // 否则直连 (VPS 环境)
-    Console.WriteLine("[System] 直连模式 (无代理)");
-    return new HttpClientHandler();
+    client.BaseAddress = new Uri(newApiBaseUrl.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(Math.Clamp(newApiTimeoutSeconds, 30, 600));
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("AiGeneratorApi/1.0");
+    client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
 });
 
 // 4. 注册 AI 服务 (使用 KeyedService 实现多态)
-// "google" -> GeminiService
-builder.Services.AddKeyedScoped<IAIService, GeminiService>("google");
 // "newapi" -> NewApiService
 builder.Services.AddKeyedScoped<IAIService, NewApiService>("newapi");
+
+// "google" -> GeminiService
+// 默认禁用，只在显式配置 AIConfig:Gemini:Enabled=true 时注册，避免生产默认依赖 Google。
+var googleEnabled = builder.Configuration.GetValue<bool>("AIConfig:Gemini:Enabled");
+if (googleEnabled)
+{
+    string? proxyUrl = builder.Configuration["AIConfig:Gemini:ProxyUrl"];
+    builder.Services.AddHttpClient("GeminiClient", client =>
+    {
+        client.Timeout = TimeSpan.FromMinutes(5); // 设置超时防止长文生成中断
+    })
+    .ConfigurePrimaryHttpMessageHandler(() =>
+    {
+        // 如果配置了代理地址 (本地开发)，则使用代理
+        if (!string.IsNullOrEmpty(proxyUrl))
+        {
+            Console.WriteLine($"[System] Gemini 代理已启用: {proxyUrl}");
+            return new HttpClientHandler
+            {
+                Proxy = new System.Net.WebProxy(proxyUrl),
+                UseProxy = true
+            };
+        }
+
+        // 否则直连 (VPS 环境)
+        Console.WriteLine("[System] Gemini 直连模式 (无代理)");
+        return new HttpClientHandler();
+    });
+
+    builder.Services.AddKeyedScoped<IAIService, GeminiService>("google");
+}
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
@@ -138,3 +160,24 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+static void LoadLocalEnvFile()
+{
+    var candidates = new[]
+    {
+        Path.Combine(Directory.GetCurrentDirectory(), ".env"),
+        Path.Combine(Directory.GetCurrentDirectory(), "AiGeneratorApi", ".env"),
+        Path.Combine(AppContext.BaseDirectory, ".env")
+    };
+
+    foreach (var envFile in candidates.Distinct())
+    {
+        if (!File.Exists(envFile))
+        {
+            continue;
+        }
+
+        Env.Load(envFile);
+        break;
+    }
+}

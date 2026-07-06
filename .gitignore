@@ -6,3 +6,7 @@ bin/
 obj/
 
 obj/
+
+.DS_Store
+**/.env
+**/gcp-key.json

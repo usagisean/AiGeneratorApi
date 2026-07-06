@@ -21,8 +21,8 @@ WORKDIR /app
 # 从编译阶段复制发布好的文件
 COPY --from=build /app/publish .
 
-# 创建一个空的 json 占位文件 (Action 会用真实的密钥覆盖它)
-RUN echo "{}" > /app/gcp-key.json
+# 不在镜像内写入任何 API Key / GCP Key。
+# 生产环境通过环境变量注入 NewAPI 配置；Google provider 默认禁用。
 
 # 暴露容器内部端口
 EXPOSE 8080

@@ -1,5 +1,6 @@
 **/.classpath
 **/.dockerignore
+**/.DS_Store
 **/.env
 **/.git
 **/.gitignore
@@ -19,6 +20,7 @@
 **/node_modules
 **/npm-debug.log
 **/obj
+**/gcp-key.json
 **/secrets.dev.yaml
 **/values.dev.yaml
 LICENSE

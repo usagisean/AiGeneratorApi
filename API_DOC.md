@@ -25,14 +25,14 @@
 | `prompt` | string | ✅ | — | 文章主题 / 提示词 |
 | `provider` | string | ❌ | `"newapi"` | AI 提供商。当前默认启用 `newapi`；`google` 保留但默认禁用 |
 | `style` | string | ❌ | `"news"` | 写作风格（见下表） |
-| `modelName` | string | ❌ | `z-ai/glm-5.2` | 指定模型名称。通常来自 `/api/v1/models` 返回列表 |
+| `modelName` | string | ❌ | `z-ai/glm-5.3-flash` | 指定模型名称。通常来自 `/api/v1/models` 返回列表 |
 | `wordCount` | int | ❌ | `1500` | 目标字数，0 = 不限 |
 | `language` | string | ❌ | `"zh"` | 语言：`zh` / `en` / `ja` |
 | `isHtml` | bool | ❌ | `true` | true = 生成结构化文章；false = 普通文本 |
 
 ### modelName 说明
 
-- 不传 `modelName`：使用 `AIConfig__NewApi__DefaultModelId`，默认 `z-ai/glm-5.2`。
+- 不传 `modelName`：使用 `AIConfig__NewApi__DefaultModelId`，默认 `z-ai/glm-5.3-flash`。
 - 传 `modelName`：服务端优先按客户端指定模型调用 NewAPI。
 - 如果指定模型调用失败，服务端仍保留原有 fallback 行为，响应中的 `data.modelUsed` 会显示实际使用模型。
 
@@ -41,16 +41,12 @@
 默认会实时请求 NewAPI `/v1/models` 拉取全量模型，并和本服务内置重点模型合并去重，然后过滤掉线上实测会 fallback 或 timeout 的模型。当前返回的是直连成功模型。完整测试说明见 `MODEL_GUIDE.md`。
 
 ```text
-z-ai/glm-5.2
-deepseek-ai/deepseek-v4-flash
-deepseek-ai/deepseek-v4-pro
-qwen/qwen3.5-122b-a10b
-qwen/qwen3.5-397b-a17b
-moonshotai/kimi-k2.6
-minimaxai/minimax-m3
-nvidia/nemotron-3-ultra-550b-a55b
+z-ai/glm-5.3-flash
+z-ai/glm-5.3
+nvidia/nemotron-3.5-lightning-30b-a3b
 nvidia/nemotron-3-super-120b-a12b
-openai/gpt-oss-120b
+nvidia/nemotron-3-ultra-550b-a55b
+moonshotai/kimi-k3
 openai/gpt-oss-20b
 ```
 
@@ -75,7 +71,7 @@ openai/gpt-oss-20b
 {
   "prompt": "人工智能对教育行业的影响",
   "provider": "newapi",
-  "modelName": "z-ai/glm-5.2",
+  "modelName": "z-ai/glm-5.3-flash",
   "style": "tech",
   "wordCount": 800,
   "language": "zh",
@@ -92,7 +88,7 @@ openai/gpt-oss-20b
   "timestamp": "2026-03-04T21:10:00+08:00",
   "data": {
     "provider": "newapi",
-    "modelUsed": "z-ai/glm-5.2",
+    "modelUsed": "z-ai/glm-5.3-flash",
     "style": "tech",
     "title": "AI革命：人工智能重塑教育未来",
     "content": "<div>正文内容...</div>",
@@ -133,11 +129,11 @@ openai/gpt-oss-20b
   "timestamp": "...",
   "data": {
     "provider": "newapi",
-    "count": 27,
+    "count": 7,
     "models": [
-      "z-ai/glm-5.2",
-      "deepseek-ai/deepseek-v4-flash",
-      "deepseek-ai/deepseek-v4-pro",
+      "z-ai/glm-5.3-flash",
+      "z-ai/glm-5.3",
+      "nvidia/nemotron-3.5-lightning-30b-a3b",
       "..."
     ]
   }

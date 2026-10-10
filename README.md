@@ -9,7 +9,7 @@
 3. 客户端调用 `POST /api/v1/article/generate`，把选择的 `modelName` 原样传回服务端。
 4. 服务端通过 NewAPI / LiteLLM / NVIDIA NIM 渠道执行底层模型调用。
 
-默认 provider 是 `newapi`，默认模型是 `z-ai/glm-5.2`。Google provider 保留代码兼容，但默认禁用。
+默认 provider 是 `newapi`，默认模型是 `z-ai/glm-5.3-flash`。Google provider 保留代码兼容，但默认禁用。
 模型列表默认会实时请求 NewAPI `/v1/models`，并和本服务内置的重点模型合并去重，再过滤掉实测 fallback / timeout 的不可靠模型后返回给客户端。
 
 模型实测说明见：[`MODEL_GUIDE.md`](./MODEL_GUIDE.md)。
@@ -28,23 +28,23 @@ x-api-key: <MY_API_KEY>
 
 ## 默认 NewAPI 模型
 
-配置集中在 `AIConfig:NewApi`。2026-07-06 线上逐个测试后，当前推荐优先展示：
+配置集中在 `AIConfig:NewApi`。2026-10-10 已通过 NVIDIA NIM、LiteLLM、NewAPI 和业务 API 端到端测试：
 
-- `z-ai/glm-5.2`
-- `qwen/qwen3.5-122b-a10b`
-- `deepseek-ai/deepseek-v4-flash`
-- `minimaxai/minimax-m3`
-- `moonshotai/kimi-k2.6`
+- `z-ai/glm-5.3-flash`
+- `z-ai/glm-5.3`
+- `nvidia/nemotron-3.5-lightning-30b-a3b`
 - `nvidia/nemotron-3-super-120b-a12b`
-- `openai/gpt-oss-120b`
+- `nvidia/nemotron-3-ultra-550b-a55b`
+- `moonshotai/kimi-k3`
+- `openai/gpt-oss-20b`
 
-`/api/v1/models?provider=newapi` 当前会返回 **27 个直连成功模型**。以下类型会被默认过滤：
+`/api/v1/models?provider=newapi` 当前会返回上述 **7 个已验证模型**。以下类型会被默认过滤：
 
 - 调用后实际 fallback 到其他模型的短别名，例如 `gpt-4o`、`gpt-5`、`glm-5`、`kimi`
 - 90 秒内无响应的超时模型
 - 明显不适合当前文本生成链路的模型别名
 
-不传 `modelName` 时使用 `AIConfig__NewApi__DefaultModelId`，当前默认是 `z-ai/glm-5.2`。
+不传 `modelName` 时使用 `AIConfig__NewApi__DefaultModelId`，当前默认是 `z-ai/glm-5.3-flash`。
 
 ## 本地运行
 
@@ -71,7 +71,7 @@ export API_KEY=<你的 MY_API_KEY>
 ./test_api.sh
 ```
 
-手动验证 `z-ai/glm-5.2`：
+手动验证 `z-ai/glm-5.3-flash`：
 
 ```bash
 curl -s "${BASE_URL}/api/v1/models?provider=newapi" \
@@ -83,12 +83,12 @@ curl -s -X POST "${BASE_URL}/api/v1/article/generate" \
   -d '{
     "prompt": "请用一句话确认当前模型可用。",
     "provider": "newapi",
-    "modelName": "z-ai/glm-5.2",
+    "modelName": "z-ai/glm-5.3-flash",
     "isHtml": false
   }' | python3 -m json.tool
 ```
 
-响应里的 `data.modelUsed` 应为 `z-ai/glm-5.2`，除非该模型调用失败后触发 fallback。
+响应里的 `data.modelUsed` 应为 `z-ai/glm-5.3-flash`，除非该模型调用失败后触发 fallback。
 
 ## Docker 构建与运行
 
@@ -105,7 +105,7 @@ docker run --rm -p 6677:8080 \
   -e IP_WHITELIST="*" \
   -e MY_API_KEY="<你的访问 API Key>" \
   -e AIConfig__NewApi__BaseUrl="https://api.zxaihub.com" \
-  -e AIConfig__NewApi__DefaultModelId="z-ai/glm-5.2" \
+  -e AIConfig__NewApi__DefaultModelId="z-ai/glm-5.3-flash" \
   -e AIConfig__NewApi__FetchRemoteModels="true" \
   -e AIConfig__NewApi__FreeApiKey="<可选>" \
   -e AIConfig__NewApi__VipApiKey="<可选>" \
@@ -120,7 +120,7 @@ docker run --rm -p 6677:8080 \
 - `MY_API_KEY`：业务访问密钥，对应请求头 `x-api-key`
 - `IP_WHITELIST`：允许访问的 IP 列表，多个用逗号分隔；可信测试环境可用 `*`
 - `AIConfig__NewApi__BaseUrl`：默认 `https://api.zxaihub.com`
-- `AIConfig__NewApi__DefaultModelId`：默认 `z-ai/glm-5.2`
+- `AIConfig__NewApi__DefaultModelId`：默认 `z-ai/glm-5.3-flash`
 - `AIConfig__NewApi__FreeApiKey` 或 `AIConfig__NewApi__VipApiKey`：至少配置一个真实 NewAPI Key
 
 建议：
@@ -133,8 +133,8 @@ docker run --rm -p 6677:8080 \
 如需覆盖模型列表，可使用数组环境变量格式：
 
 ```bash
-AIConfig__NewApi__Models__0=z-ai/glm-5.2
-AIConfig__NewApi__Models__1=deepseek-ai/deepseek-v4-flash
-AIConfig__NewApi__FallbackModels__0=z-ai/glm-5.2
+AIConfig__NewApi__Models__0=z-ai/glm-5.3-flash
+AIConfig__NewApi__Models__1=nvidia/nemotron-3.5-lightning-30b-a3b
+AIConfig__NewApi__FallbackModels__0=z-ai/glm-5.3-flash
 AIConfig__NewApi__ExcludedModels__0=gpt-4o
 ```

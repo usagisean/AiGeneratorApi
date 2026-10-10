@@ -43,7 +43,7 @@ public class NewApiService : IAIService
 
     public async Task<GenerateResult> GenerateContentAsync(GenerateRequest request)
     {
-        // 三层兜底：请求指定 → 配置默认 → 代码默认（NewAPI 用 z-ai/glm-5.2）
+        // 三层兜底：请求指定 → 配置默认 → 代码默认（NewAPI 用 z-ai/glm-5.3-flash）
         var requestedModel = !string.IsNullOrWhiteSpace(request.ModelName) ? request.ModelName.Trim()
                            : !string.IsNullOrWhiteSpace(_config.DefaultModelId) ? _config.DefaultModelId.Trim()
                            : NewApiModelDefaults.DefaultModelId;

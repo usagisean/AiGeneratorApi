@@ -7,30 +7,25 @@ namespace AiGeneratorApi.Model;
 public static class NewApiModelDefaults
 {
     public const string DefaultBaseUrl = "https://api.zxaihub.com";
-    public const string DefaultModelId = "z-ai/glm-5.2";
+    public const string DefaultModelId = "z-ai/glm-5.3-flash";
 
     public static readonly string[] KnownModels =
     [
-        "z-ai/glm-5.2",
-        "deepseek-ai/deepseek-v4-flash",
-        "deepseek-ai/deepseek-v4-pro",
-        "qwen/qwen3.5-122b-a10b",
-        "qwen/qwen3.5-397b-a17b",
-        "moonshotai/kimi-k2.6",
-        "minimaxai/minimax-m3",
-        "nvidia/nemotron-3-ultra-550b-a55b",
+        "z-ai/glm-5.3-flash",
+        "z-ai/glm-5.3",
+        "nvidia/nemotron-3.5-lightning-30b-a3b",
         "nvidia/nemotron-3-super-120b-a12b",
-        "openai/gpt-oss-120b",
+        "nvidia/nemotron-3-ultra-550b-a55b",
+        "moonshotai/kimi-k3",
         "openai/gpt-oss-20b"
     ];
 
     public static readonly string[] FallbackModels =
     [
-        "z-ai/glm-5.2",
-        "deepseek-ai/deepseek-v4-flash",
-        "qwen/qwen3.5-122b-a10b",
-        "moonshotai/kimi-k2.6",
-        "openai/gpt-oss-120b"
+        "z-ai/glm-5.3-flash",
+        "nvidia/nemotron-3.5-lightning-30b-a3b",
+        "nvidia/nemotron-3-super-120b-a12b",
+        "openai/gpt-oss-20b"
     ];
 
     /// <summary>
@@ -39,6 +34,8 @@ public static class NewApiModelDefaults
     public static readonly string[] ExcludedModels =
     [
         "bytedance/seed-oss-36b-instruct",
+        "deepseek-ai/deepseek-v4-flash",
+        "deepseek-ai/deepseek-v4-pro",
         "gemma-pro",
         "glm-4",
         "glm-5",
@@ -47,6 +44,7 @@ public static class NewApiModelDefaults
         "gpt-5",
         "gpt-oss",
         "kimi",
+        "moonshotai/kimi-k2.6",
         "meta/llama-3.3-70b-instruct",
         "microsoft/phi-4-mini-instruct",
         "minimax",
@@ -55,6 +53,10 @@ public static class NewApiModelDefaults
         "o1-mini",
         "phi-mini",
         "turbo-chat",
-        "vision-lite"
+        "vision-lite",
+        "z-ai/glm-5.2",
+        "qwen/qwen3.5-122b-a10b",
+        "qwen/qwen3.5-397b-a17b",
+        "openai/gpt-oss-120b"
     ];
 }

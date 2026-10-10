@@ -9,7 +9,7 @@ set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:6677}"
 API_KEY="${API_KEY:-${MY_API_KEY:-}}"
-MODEL_NAME="${MODEL_NAME:-z-ai/glm-5.2}"
+MODEL_NAME="${MODEL_NAME:-z-ai/glm-5.3-flash}"
 
 if [[ -z "${API_KEY}" ]]; then
   echo "ERROR: 请先设置 API_KEY 或 MY_API_KEY" >&2
